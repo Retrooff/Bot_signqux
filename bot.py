@@ -1,4 +1,7 @@
-import telebot from telebot import types import json import os
+import telebot 
+from telebot import types 
+import json 
+import os
 
 === CONFIGURATION ===
 
