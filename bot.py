@@ -3,11 +3,11 @@ from telebot import types
 import json 
 import os
 
-=== CONFIGURATION ===
+#=== CONFIGURATION ===
 
 TOKEN = "8078548699:AAEEkJo2vp1S4chVl25j0SuRv9xojSy_rj4" ADMIN_ID = 8121512840  # Ton ID admin
 
-=== FICHIER DE DONNÉES ===
+#=== FICHIER DE DONNÉES ===
 
 DB_FILE = "users.json"
 
@@ -17,7 +17,7 @@ def save_data(data): with open(DB_FILE, 'w') as f: json.dump(data, f, indent=2)
 
 data = load_data() bot = telebot.TeleBot(TOKEN, parse_mode='HTML')
 
-=== START ===
+#=== START ===
 
 @bot.message_handler(commands=['start']) def start(msg): user_id = str(msg.from_user.id) if user_id not in data: data[user_id] = { "signals_used": 0, "verified": False } save_data(data)
 
@@ -26,11 +26,11 @@ keyboard.row("📊 Crash", "✈️ Aviator", "🚀 Lucky Jet")
 keyboard.row("🎁 Mon ID Telegram", "💎 Premium")
 bot.send_message(msg.chat.id, f"👋 Bienvenue sur le bot de prédiction !\n\n🎁 Tu as droit à 5 signaux gratuits.\n💡 Utilise le code promo <b>AK0127</b> pour t'inscrire sur 1win et débloquer les signaux.\n\nChoisis ton jeu ci-dessous ⬇️", reply_markup=keyboard)
 
-=== IDENTIFIANT ===
+#=== IDENTIFIANT ===
 
 @bot.message_handler(func=lambda m: m.text == "🎁 Mon ID Telegram") def send_id(msg): bot.reply_to(msg, f"🪪 Ton ID est : <code>{msg.from_user.id}</code>\nEnvoie-le à l'admin pour recevoir des signaux 🎯")
 
-=== JEU ===
+#=== JEU ===
 
 def handle_game_prediction(msg, game): user_id = str(msg.from_user.id) user = data.get(user_id)
 
