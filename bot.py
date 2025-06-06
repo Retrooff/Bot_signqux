@@ -6,7 +6,7 @@ import os
 #=== CONFIGURATION ===
 
 TOKEN = "8078548699:AAEEkJo2vp1S4chVl25j0SuRv9xojSy_rj4" 
-ADMIN_ID = 8121512840  # Ton ID admin
+ADMIN_ID = 8121512840  
 
 #=== FICHIER DE DONNÉES ===
 
