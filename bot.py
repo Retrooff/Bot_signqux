@@ -1,99 +1,138 @@
-import telebot 
-from telebot import types 
-import json 
 import os
+import json
+import random
+from telegram import Update, ReplyKeyboardMarkup, KeyboardButton
+from telegram.ext import (
+    ApplicationBuilder,
+    CommandHandler,
+    MessageHandler,
+    filters,
+    ContextTypes,
+    CallbackContext,
+)
 
-#=== CONFIGURATION ===
-
-TOKEN = "8078548699:AAEEkJo2vp1S4chVl25j0SuRv9xojSy_rj4" 
-ADMIN_ID = 8121512840  
-
-#=== FICHIER DE DONNÉES ===
-
+TOKEN = "8078548699:AAEEkJo2vp1S4chVl25j0SuRv9xojSy_rj4"
+ADMIN_ID = 6881537234
 DB_FILE = "users.json"
+FREE_SIGNALS = 2
+BONUS_SIGNALS = 3
+VALID_GAMES = ["Crash", "Aviator", "Lucky Jet"]
 
+# --- Fonctions pour la base de données ---
 def load_data():
     if not os.path.exists(DB_FILE):
         return {}
     with open(DB_FILE, 'r') as f:
         return json.load(f)
-def save_data(data): with open(DB_FILE, 'w') as f: json.dump(data, f, indent=2)
 
-data = load_data() bot = telebot.TeleBot(TOKEN, parse_mode='HTML')
+def save_data(data):
+    with open(DB_FILE, 'w') as f:
+        json.dump(data, f)
 
-#=== START ===
+def get_user(user_id):
+    data = load_data()
+    return data.get(str(user_id), {"signals_used": 0, "has_bonus": False})
 
-@bot.message_handler(commands=['start']) def start(msg): user_id = str(msg.from_user.id) if user_id not in data: data[user_id] = { "signals_used": 0, "verified": False } save_data(data)
-
-keyboard = types.ReplyKeyboardMarkup(resize_keyboard=True)
-keyboard.row("📊 Crash", "✈️ Aviator", "🚀 Lucky Jet")
-keyboard.row("🎁 Mon ID Telegram", "💎 Premium")
-bot.send_message(msg.chat.id, f"👋 Bienvenue sur le bot de prédiction !\n\n🎁 Tu as droit à 5 signaux gratuits.\n💡 Utilise le code promo <b>AK0127</b> pour t'inscrire sur 1win et débloquer les signaux.\n\nChoisis ton jeu ci-dessous ⬇️", reply_markup=keyboard)
-
-#=== IDENTIFIANT ===
-
-@bot.message_handler(func=lambda m: m.text == "🎁 Mon ID Telegram") def send_id(msg): bot.reply_to(msg, f"🪪 Ton ID est : <code>{msg.from_user.id}</code>\nEnvoie-le à l'admin pour recevoir des signaux 🎯")
-
-#=== JEU ===
-
-def handle_game_prediction(msg, game): user_id = str(msg.from_user.id) user = data.get(user_id)
-
-if not user:
-    return start(msg)
-
-if user["signals_used"] < 2:
-    user["signals_used"] += 1
+def update_user(user_id, user_data):
+    data = load_data()
+    data[str(user_id)] = user_data
     save_data(data)
-    return bot.reply_to(msg, generate_prediction(game))
 
-elif not user["verified"]:
-    bot.send_message(msg.chat.id, "🔐 Tu as utilisé tes 2 signaux gratuits.\nPour débloquer les 3 autres, crée un compte 1win avec le code <b>AK0127</b> et envoie une capture d’écran ici.")
-    bot.register_next_step_handler(msg, handle_verification)
+def get_all_users():
+    return load_data()
 
-elif user["signals_used"] < 5:
-    user["signals_used"] += 1
-    save_data(data)
-    return bot.reply_to(msg, generate_prediction(game))
+# --- Fonction pour générer un signal aléatoire ---
+def generate_signal():
+    return f"🚀 MULTI PRÉVU : x{random.choice([1.5, 2, 3, 5, 7, 10])}"
 
-else:
-    bot.send_message(msg.chat.id, "🚫 Tu as utilisé tous tes 5 signaux gratuits. Contacte l’admin pour en recevoir plus ✉️")
+# --- Commandes Telegram ---
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    keyboard = [
+        [KeyboardButton("📲 Demander un signal")],
+        [KeyboardButton("🎮 Choisir le jeu")],
+    ]
+    reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+    await update.message.reply_text(f"Bienvenue {user.first_name} 👋\n\nTu peux recevoir des signaux gratuits pour les jeux Crash, Aviator ou Lucky Jet.\n\nTape sur un bouton ci-dessous pour commencer 👇", reply_markup=reply_markup)
 
-@bot.message_handler(func=lambda m: m.text in ["📊 Crash", "✈️ Aviator", "🚀 Lucky Jet"]) def game_selector(msg): if msg.text == "📊 Crash": handle_game_prediction(msg, "Crash") elif msg.text == "✈️ Aviator": handle_game_prediction(msg, "Aviator") elif msg.text == "🚀 Lucky Jet": handle_game_prediction(msg, "Lucky Jet")
+async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    text = update.message.text
+    user_data = get_user(user.id)
 
-=== GÉNÉRATION DE SIGNAL ===
+    if text == "📲 Demander un signal":
+        if user_data["signals_used"] < FREE_SIGNALS:
+            signal = generate_signal()
+            user_data["signals_used"] += 1
+            update_user(user.id, user_data)
+            await update.message.reply_text(signal)
+        elif not user_data["has_bonus"]:
+            await update.message.reply_text(
+                "⚠️ Tu as utilisé tes 2 signaux gratuits.\n\n✅ Crée un compte 1win avec le code promo *AK0127* et envoie une capture d’écran ici pour recevoir 3 signaux supplémentaires.",
+                parse_mode="Markdown",
+            )
+        else:
+            if user_data["signals_used"] < FREE_SIGNALS + BONUS_SIGNALS:
+                signal = generate_signal()
+                user_data["signals_used"] += 1
+                update_user(user.id, user_data)
+                await update.message.reply_text(signal)
+            else:
+                await update.message.reply_text("🚫 Tu as utilisé tous tes signaux. Reviens plus tard.")
 
-import random
+    elif text == "🎮 Choisir le jeu":
+        keyboard = [[KeyboardButton(game)] for game in VALID_GAMES]
+        reply_markup = ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+        await update.message.reply_text("Choisis un jeu :", reply_markup=reply_markup)
 
-def generate_prediction(game): x = round(random.uniform(1.5, 100), 2) return f"📡 Signal pour <b>{game}</b> : x<b>{x}</b> 🔥\n\nCode promo : <b>AK0127</b>"
+    elif text in VALID_GAMES:
+        await update.message.reply_text(f"🎮 Tu as sélectionné *{text}*.\n\nClique sur 📲 Demander un signal pour recevoir un signal pour ce jeu.", parse_mode="Markdown")
 
-=== VÉRIFICATION DE CAPTURE ===
+    elif update.message.photo:
+        if user_data["has_bonus"]:
+            await update.message.reply_text("✅ Capture déjà vérifiée. Tu as déjà reçu tes bonus.")
+        else:
+            user_data["has_bonus"] = True
+            update_user(user.id, user_data)
+            await update.message.reply_text("✅ Capture reçue et vérifiée. Tu as maintenant accès à 3 signaux supplémentaires !")
 
-def handle_verification(msg): if msg.content_type == 'photo': bot.send_message(ADMIN_ID, f"📸 Nouvelle capture reçue de <code>{msg.from_user.id}</code>") bot.forward_message(ADMIN_ID, msg.chat.id, msg.message_id) bot.send_message(msg.chat.id, "✅ Capture envoyée à l'admin. Attends la validation !") else: bot.send_message(msg.chat.id, "❌ Merci d’envoyer une capture (image). Réessaie avec une photo.")
+    else:
+        await update.message.reply_text("❓ Je n’ai pas compris. Utilise les boutons du menu.")
 
-=== ADMIN PEUT AJOUTER DES SIGNAUX ===
+# --- Commande admin pour envoyer un signal manuellement ---
+async def send_signal(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user = update.effective_user
+    if user.id != ADMIN_ID:
+        return
+    if len(context.args) < 2:
+        await update.message.reply_text("Utilisation : /signal user_id message")
+        return
+    target_id = int(context.args[0])
+    message = " ".join(context.args[1:])
+    try:
+        await context.bot.send_message(chat_id=target_id, text=message)
+        await update.message.reply_text("✅ Signal envoyé.")
+    except Exception as e:
+        await update.message.reply_text(f"Erreur : {e}")
 
-@bot.message_handler(commands=['add']) def add_signal(msg): if msg.from_user.id != ADMIN_ID: return
+# --- Commande admin pour voir la liste des utilisateurs ---
+async def list_users(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if update.effective_user.id != ADMIN_ID:
+        return
+    data = get_all_users()
+    message = "📋 Utilisateurs :\n"
+    for uid, info in data.items():
+        message += f"- {uid}: {info['signals_used']} signaux utilisés, bonus = {info['has_bonus']}\n"
+    await update.message.reply_text(message)
 
-args = msg.text.split()
-if len(args) != 2:
-    return bot.reply_to(msg, "❗ Utilisation : /add ID")
+# --- Lancer le bot ---
+def main():
+    app = ApplicationBuilder().token(TOKEN).build()
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("signal", send_signal))
+    app.add_handler(CommandHandler("users", list_users))
+    app.add_handler(MessageHandler(filters.ALL, handle_message))
+    app.run_polling()
 
-user_id = args[1]
-if user_id in data:
-    data[user_id]["signals_used"] = 0
-    data[user_id]["verified"] = True
-    save_data(data)
-    bot.send_message(msg.chat.id, f"✅ Signaux réinitialisés pour l’utilisateur {user_id} !")
-else:
-    bot.reply_to(msg, "Utilisateur introuvable.")
-
-=== PREMIUM ===
-
-@bot.message_handler(func=lambda m: m.text == "💎 Premium") def premium(msg): bot.send_message(msg.chat.id, "🌟 Abonne-toi au Premium pour des signaux spéciaux à forte cote !\n\nContacte @Knak0127 pour en profiter. N’oublie pas le code promo : <b>AK0127</b>")
-
-=== LIMITATION EN PRIVÉ ===
-
-@bot.message_handler(func=lambda m: True) def all_private(msg): if msg.chat.type != "private": bot.reply_to(msg, "❌ Ce bot fonctionne uniquement en privé.")
-
-bot.infinity_polling()
-
+if __name__ == "__main__":
+    main()
